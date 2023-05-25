@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Trip Planner</title>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC2C6zoGkmX-s0phK2duOAZlBV79wmuhNE&libraries=places"></script>
+  <script>
+    var map;
+    var markers = [];
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 10
+      });
+    }
+
+    function geocodeLocation(location) {
+      return new Promise((resolve, reject) => {
+        var geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: location }, (results, status) => {
+          if (status === 'OK') {
+            resolve(results[0].geometry.location);
+          } else {
+            reject(new Error('Geocode error: ' + status));
+          }
+        });
+      });
+    }
+
+    function calculateDistanceAndDuration(origin, destination) {
+      return new Promise((resolve, reject) => {
+        var directionsService = new google.maps.DirectionsService();
+        var request = {
+          origin: origin,
+          destination: destination,
+          travelMode: 'DRIVING',
+          drivingOptions: {
+            departureTime: new Date()
+          }
+        };
+
+        directionsService.route(request, (response, status) => {
+          if (status === 'OK') {
+            var route = response.routes[0];
+            var distance = route.legs[0].distance.text;
+            var duration = route.legs[0].duration.text;
+            var pathCoordinates = route.overview_path.map(point => {
+              return { lat: point.lat(), lng: point.lng() };
+            });
+
+            // Center the map on the midpoint between origin and destination
+            var bounds = new google.maps.LatLngBounds();
+            bounds.extend(origin);
+            bounds.extend(destination);
+            map.fitBounds(bounds);
+
+            resolve({ distance, duration, pathCoordinates });
+          } else {
+            reject(new Error('Directions error: ' + status));
+          }
+        });
+      });
+    }
+
+    async function planTrip() {
+      var location1 = document.getElementById('location1').value;
+      var location2 = document.getElementById('location2').value;
+
+      try {
+        var origin = await geocodeLocation(location1);
+        var destination = await geocodeLocation(location2);
+
+        var result = await calculateDistanceAndDuration(origin, destination);
+
+        var tripDetails = '<div class="trip-details">';
+        tripDetails += '<h2>Trip Details</h2>';
+        tripDetails += '<p>From: ' + location1 + '</p>';
+        tripDetails += '<p>To: ' + location2 + '</p>';
+        tripDetails += '<p>Distance: ' + result.distance + '</p>';
+        tripDetails += '<p>Duration: ' + result.duration + '</p>';
+        tripDetails += '</div>';
+
+        document.getElementById('tripDetails').innerHTML = tripDetails;
+
+        var routePath = new google.maps.Polyline({
+          path: result.pathCoordinates,
+          geodesic: true,
+          strokeColor: '#FF0000',
+          strokeOpacity: 1.0,
+          strokeWeight: 2
+        });
+
+        routePath.setMap(map);
+
+        document.getElementById('map').style.display = 'block';
+      } catch (error) {
+        console.log(error);
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>Trip Planner</h1>
+  <label for="location1">Location 1:</label>
+  <input type="text" id="location1" /><br />
+  <label for="location2">Location 2:</label>
+  <input type="text" id="location2" /><br />
+  <button onclick="planTrip()">Plan Trip</button>
+  <div id="tripDetails"></div>
+  <div id="map"></div>
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC2C6zoGkmX-s0phK2duOAZlBV79wmuhNE&libraries=places&callback=initMap"></script>
+</body>
+</html>
